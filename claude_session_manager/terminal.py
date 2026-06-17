@@ -7,18 +7,17 @@ from pathlib import Path
 
 import gi
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Vte", "3.91")
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, GLib, GObject, Gtk, Pango, Vte  # noqa: E402
 
+import re as _re  # noqa: E402
 from . import themes  # noqa: E402
 from .i18n import _  # noqa: E402
 from .providers import Provider, get_provider  # noqa: E402
 
-# PCRE2 flags for the find bar: multiline, case-insensitive.
-_PCRE2_CASELESS = 0x00000008
-_PCRE2_MULTILINE = 0x00000400
-_SEARCH_FLAGS = _PCRE2_CASELESS | _PCRE2_MULTILINE
+_SEARCH_FLAGS = GLib.RegexCompileFlags.CASELESS | GLib.RegexCompileFlags.MULTILINE
 
 
 class TerminalTab(Gtk.Box):
@@ -51,16 +50,16 @@ class TerminalTab(Gtk.Box):
         self.terminal.connect("child-exited", self._on_child_exited)
 
         self._search_bar = self._build_search_bar()
-        self.append(self._search_bar)
+        self.pack_start(self._search_bar, False, False, 0)
 
-        scrolled = Gtk.ScrolledWindow(child=self.terminal, vexpand=True)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self.append(scrolled)
+        scrolled.add(self.terminal)
+        self.pack_start(scrolled, True, True, 0)
 
         # Ctrl+Shift+C / Ctrl+Shift+V / Ctrl+Shift+G, terminal-style
-        keys = Gtk.EventControllerKey()
-        keys.connect("key-pressed", self._on_key_pressed)
-        self.terminal.add_controller(keys)
+        self.terminal.connect("key-press-event", self._on_key_pressed)
 
         if settings:
             self.apply_settings(settings)
@@ -76,9 +75,6 @@ class TerminalTab(Gtk.Box):
                 )
             cwd = str(Path.home())
 
-        # Run the user's interactive shell and type the agent command into it,
-        # so aliases/env apply and the tab drops to a prompt when the agent exits.
-        # The tab closes when the *shell* exits.
         self._initial_command: str | None = None
         if session_id is not None:
             command = self.provider.resume_command(session_id, fork=self.fork)
@@ -103,13 +99,19 @@ class TerminalTab(Gtk.Box):
             None,  # envv: inherit
             GLib.SpawnFlags.DEFAULT,
             None,  # child_setup
-            None,  # child_setup_data
+            None,  # child_setup_data (required by VTE 2.91 on this system)
             -1,  # timeout
             None,  # cancellable
             self._on_spawned,
         )
 
-    def _on_spawned(self, terminal: Vte.Terminal, pid: int, error: GLib.Error | None) -> None:
+    def _on_spawned(
+        self,
+        terminal: Vte.Terminal,
+        pid: int,
+        error: GLib.Error | None,
+        _user_data=None,
+    ) -> None:
         if error is not None:
             self.feed_message(_("failed to start shell: {msg}").format(msg=error.message))
             return
@@ -124,23 +126,27 @@ class TerminalTab(Gtk.Box):
 
     def _build_search_bar(self) -> Gtk.SearchBar:
         bar = Gtk.SearchBar()
-        self._search_entry = Gtk.SearchEntry(hexpand=True, placeholder_text=_("Find in terminal…"))
+        self._search_entry = Gtk.SearchEntry()
+        self._search_entry.set_hexpand(True)
+        self._search_entry.set_placeholder_text(_("Find in terminal…"))
         self._search_entry.connect("search-changed", self._on_search_changed)
         self._search_entry.connect("activate", lambda *_: self._search_step(forward=False))
         self._search_entry.connect("next-match", lambda *_: self._search_step(forward=True))
         self._search_entry.connect("previous-match", lambda *_: self._search_step(forward=False))
         self._search_entry.connect("stop-search", lambda *_: self.hide_search())
 
-        prev_btn = Gtk.Button(icon_name="go-up-symbolic", tooltip_text=_("Previous match"))
+        prev_btn = Gtk.Button.new_from_icon_name("go-up-symbolic", Gtk.IconSize.BUTTON)
+        prev_btn.set_tooltip_text(_("Previous match"))
         prev_btn.connect("clicked", lambda *_: self._search_step(forward=False))
-        next_btn = Gtk.Button(icon_name="go-down-symbolic", tooltip_text=_("Next match"))
+        next_btn = Gtk.Button.new_from_icon_name("go-down-symbolic", Gtk.IconSize.BUTTON)
+        next_btn.set_tooltip_text(_("Next match"))
         next_btn.connect("clicked", lambda *_: self._search_step(forward=True))
 
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        box.append(self._search_entry)
-        box.append(prev_btn)
-        box.append(next_btn)
-        bar.set_child(box)
+        box.pack_start(self._search_entry, True, True, 0)
+        box.pack_start(prev_btn, False, False, 0)
+        box.pack_start(next_btn, False, False, 0)
+        bar.add(box)
         bar.connect_entry(self._search_entry)
         bar.set_show_close_button(True)
         bar.connect("notify::search-mode-enabled", self._on_search_mode_changed)
@@ -148,8 +154,8 @@ class TerminalTab(Gtk.Box):
         return bar
 
     def _on_search_mode_changed(self, bar: Gtk.SearchBar, _pspec) -> None:
-        if not bar.get_search_mode():  # cleared via the close button or Escape
-            self.terminal.search_set_regex(None, 0)
+        if not bar.get_search_mode():
+            self.terminal.search_set_gregex(None, 0)
             self.grab_terminal_focus()
 
     def toggle_search(self) -> None:
@@ -160,21 +166,20 @@ class TerminalTab(Gtk.Box):
             self._search_entry.grab_focus()
 
     def hide_search(self) -> None:
-        # _on_search_mode_changed clears the regex and refocuses the terminal.
         self._search_bar.set_search_mode(False)
 
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
         query = entry.get_text()
         if not query:
-            self.terminal.search_set_regex(None, 0)
+            self.terminal.search_set_gregex(None, 0)
             return
-        pattern = GLib.Regex.escape_string(query, -1)
+        pattern = _re.escape(query)
         try:
-            regex = Vte.Regex.new_for_search(pattern, len(pattern.encode()), _SEARCH_FLAGS)
+            regex = GLib.Regex.new(pattern, _SEARCH_FLAGS, GLib.RegexMatchFlags(0))
         except GLib.Error:
             return
-        self.terminal.search_set_regex(regex, 0)
-        self._search_step(forward=False)  # nearest match above the prompt
+        self.terminal.search_set_gregex(regex, 0)
+        self._search_step(forward=False)
 
     def _search_step(self, forward: bool) -> None:
         if forward:
@@ -191,8 +196,7 @@ class TerminalTab(Gtk.Box):
 
     def has_running_command(self) -> bool:
         """True when something other than the shell (e.g. claude) owns the
-        terminal's foreground — the cue terminal emulators use for
-        close-confirmation."""
+        terminal's foreground."""
         if self._child_pid is None:
             return False
         pty = self.terminal.get_pty()
@@ -219,13 +223,12 @@ class TerminalTab(Gtk.Box):
     def grab_terminal_focus(self) -> None:
         self.terminal.grab_focus()
 
-    def _on_key_pressed(self, _ctrl, keyval: int, _keycode: int, state: Gdk.ModifierType) -> bool:
+    def _on_key_pressed(self, _widget, event: Gdk.EventKey) -> bool:
+        state = event.state
+        keyval = event.keyval
         ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
         shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
 
-        # Shift+Enter → newline. Terminals send the same byte for Enter and
-        # Shift+Enter, so we emit Meta+Enter (ESC + CR), which Claude Code
-        # interprets as "insert a line break" rather than "submit".
         if shift and not ctrl and keyval in (
             Gdk.KEY_Return,
             Gdk.KEY_KP_Enter,

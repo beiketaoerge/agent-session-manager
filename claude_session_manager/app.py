@@ -8,10 +8,10 @@ from pathlib import Path
 
 import gi
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-gi.require_version("Vte", "3.91")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+gi.require_version("Vte", "2.91")
+from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from .prefs import apply_color_scheme
 from .state import AppState
@@ -34,16 +34,17 @@ _CSS = b"""
 .group-header { padding: 10px 10px 4px 10px; }
 
 /* session-row state badges */
-.waiting-badge { color: #e5a50a; }      /* Claude asked a question */
-.interrupted-badge { color: #e01b24; }  /* user stopped Claude mid-task */
+.waiting-badge { color: #e5a50a; }
+.interrupted-badge { color: #e01b24; }
 
 /* make the active tab clearly stand out from inactive ones */
-tabbar tab:checked {
-  background-color: alpha(#D97757, 0.22);
-  box-shadow: inset 0 -3px 0 #D97757;
+notebook tab:active {
+  background-color: shade(#D97757, 1.6);
+  border-bottom: 3px solid #D97757;
 }
-tabbar tab:checked label { font-weight: bold; }
-tabbar tab:not(:checked) label { opacity: 0.6; }
+notebook tab:active label { font-weight: bold; }
+notebook tab label { opacity: 0.6; }
+notebook tab:active label { opacity: 1.0; }
 
 .count-badge {
   background-color: alpha(currentColor, 0.1);
@@ -64,30 +65,30 @@ row.session-child:hover {
   background-color: alpha(currentColor, 0.1);
   border-left-color: alpha(currentColor, 0.3);
 }
+
+.heading { font-weight: bold; }
+.caption { font-size: 0.85em; }
 """
 
 
 APP_ID = "io.github.r4nd3l.AgentSessionManager"
 
 
-class App(Adw.Application):
+class App(Gtk.Application):
     def __init__(self) -> None:
-        # CSM_APP_ID lets a demo instance run alongside the real one (for screenshots).
         super().__init__(application_id=os.environ.get("CSM_APP_ID") or APP_ID)
 
     def do_startup(self) -> None:
-        Adw.Application.do_startup(self)
-        display = Gdk.Display.get_default()
+        Gtk.Application.do_startup(self)
+        screen = Gdk.Screen.get_default()
         provider = Gtk.CssProvider()
         provider.load_from_data(_CSS)
-        Gtk.StyleContext.add_provider_for_display(
-            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
-        if _BUNDLED_ICONS.is_dir():  # running from source; installed icons live in the system theme
-            Gtk.IconTheme.get_for_display(display).add_search_path(str(_BUNDLED_ICONS))
+        if _BUNDLED_ICONS.is_dir():
+            Gtk.IconTheme.get_default().append_search_path(str(_BUNDLED_ICONS))
 
-        # Shared across all windows so scans/monitors aren't duplicated and
-        # state.json writes don't race.
         self.state = AppState()
         apply_color_scheme(self.state.get_setting("color_scheme"))
         self.store = SessionStore(self.state)
@@ -104,7 +105,7 @@ class App(Adw.Application):
 
     def _new_window(self) -> MainWindow:
         window = MainWindow(application=self, state=self.state, store=self.store)
-        window.present()
+        window.show_all()
         return window
 
     def _on_focus_session(self, _action, param: GLib.Variant) -> None:

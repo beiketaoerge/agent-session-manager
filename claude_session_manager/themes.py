@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import gi
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Vte", "3.91")
+gi.require_version("Gdk", "3.0")
+gi.require_version("Gtk", "3.0")
+gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, Vte  # noqa: E402
 
 # Each theme: foreground, background, and 16 ANSI colors (hex without '#').
@@ -97,7 +98,7 @@ def _rgba(hex_str: str) -> Gdk.RGBA:
 
 def apply_terminal_theme(terminal: Vte.Terminal, name: str | None) -> None:
     theme = _THEMES.get(name or DEFAULT_THEME)
-    if not theme:  # "Default" / unknown → follow the system colors
+    if not theme:  # "Default" / unknown -> follow the system colors
         terminal.set_default_colors()
         return
     terminal.set_colors(
