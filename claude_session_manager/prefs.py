@@ -21,29 +21,39 @@ def _hex_rgb(hex6: str) -> tuple[float, float, float]:
     return tuple(int(hex6[i : i + 2], 16) / 255 for i in (0, 2, 4))
 
 
+def _rounded_rect(cr, x, y, w, h, r):
+    import math
+    cr.arc(x + r, y + r, r, math.pi, 1.5 * math.pi)
+    cr.arc(x + w - r, y + r, r, 1.5 * math.pi, 2 * math.pi)
+    cr.arc(x + w - r, y + h - r, r, 0, 0.5 * math.pi)
+    cr.arc(x + r, y + h - r, r, 0.5 * math.pi, math.pi)
+    cr.close_path()
+
+
 def _draw_swatch(_area, cr, name: str) -> None:
     alloc = _area.get_allocation()
     width, height = alloc.width, alloc.height
+    radius = 5
     theme = get_theme(name)
     if theme is None:
         cr.set_source_rgb(0.55, 0.55, 0.55)
-        cr.rectangle(0, 0, width, height)
+        _rounded_rect(cr, 0, 0, width, height, radius)
         cr.fill()
         return
     r, g, b = _hex_rgb(theme["bg"])
     cr.set_source_rgb(r, g, b)
-    cr.rectangle(0, 0, width, height)
+    _rounded_rect(cr, 0, 0, width, height, radius)
     cr.fill()
     r, g, b = _hex_rgb(theme["fg"])
     cr.set_source_rgb(r, g, b)
-    cr.rectangle(6, 4, 10, height - 8)
+    _rounded_rect(cr, 6, 4, 10, height - 8, 2)
     cr.fill()
     sw, gap = 13, 3
-    x = width - len([1, 2, 3, 4, 5, 6]) * (sw + gap)
+    x = width - 6 * (sw + gap)
     for i in (1, 2, 3, 4, 5, 6):
         r, g, b = _hex_rgb(theme["palette"][i])
         cr.set_source_rgb(r, g, b)
-        cr.rectangle(x, 4, sw, height - 8)
+        _rounded_rect(cr, x, 4, sw, height - 8, 2)
         cr.fill()
         x += sw + gap
 

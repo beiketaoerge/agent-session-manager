@@ -65,7 +65,7 @@ class GroupHeaderRow(Gtk.ListBoxRow):
         box.pack_start(label, True, True, 0)
 
         count_label = Gtk.Label(label=str(count))
-        count_label.get_style_context().add_class("dim-label")
+        count_label.get_style_context().add_class("count-badge")
         box.pack_start(count_label, False, False, 0)
 
         self.add(box)
@@ -237,6 +237,7 @@ class SessionSidebar(Gtk.Box):
 
     def __init__(self, store: SessionStore) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.get_style_context().add_class("cc-sidebar")
         self.store = store
         self._collapsed: set[tuple] = set()
         self._known_groups: set[tuple] = set()
@@ -248,16 +249,24 @@ class SessionSidebar(Gtk.Box):
 
         self._store_handler = store.connect("refreshed", self._on_store_refreshed)
 
-        # -- header ---------------------------------------------------------
-        header = Gtk.HeaderBar()
-        header.set_show_close_button(False)
-        header.set_title(_("Sessions"))
+        # -- branded header -------------------------------------------------
+        brand_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        brand_box.get_style_context().add_class("cc-brand-box")
 
-        self.select_btn = Gtk.ToggleButton()
-        self.select_btn.set_image(Gtk.Image.new_from_icon_name("object-select-symbolic", Gtk.IconSize.BUTTON))
-        self.select_btn.set_tooltip_text(_("Select sessions"))
-        self.select_btn.connect("toggled", lambda b: self._set_selection_mode(b.get_active()))
-        header.pack_start(self.select_btn)
+        brand_icon = Gtk.Image.new_from_icon_name(
+            "utilities-terminal-symbolic", Gtk.IconSize.LARGE_TOOLBAR
+        )
+        brand_icon.get_style_context().add_class("cc-accent-icon")
+        brand_box.pack_start(brand_icon, False, False, 0)
+
+        brand_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        brand_title = Gtk.Label(label="Agent Session Manager", xalign=0.0)
+        brand_title.get_style_context().add_class("cc-brand-title")
+        brand_text.pack_start(brand_title, False, False, 0)
+        brand_sub = Gtk.Label(label=_("Sessions"), xalign=0.0)
+        brand_sub.get_style_context().add_class("cc-brand-sub")
+        brand_text.pack_start(brand_sub, False, False, 0)
+        brand_box.pack_start(brand_text, True, True, 0)
 
         menu = Gio.Menu()
         menu.append(_("Show hidden sessions"), "win.show-hidden")
@@ -266,39 +275,52 @@ class SessionSidebar(Gtk.Box):
         menu.append(_("About Agent Session Manager"), "win.about")
         menu_btn = Gtk.MenuButton()
         menu_btn.set_image(Gtk.Image.new_from_icon_name("open-menu-symbolic", Gtk.IconSize.BUTTON))
+        menu_btn.get_style_context().add_class("flat")
+        menu_btn.set_valign(Gtk.Align.CENTER)
         menu_btn.set_menu_model(menu)
-        header.pack_end(menu_btn)
+        brand_box.pack_end(menu_btn, False, False, 0)
 
-        refresh_btn = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.BUTTON)
-        refresh_btn.set_tooltip_text(_("Refresh session list"))
-        refresh_btn.set_action_name("win.refresh")
-        header.pack_end(refresh_btn)
-        self.pack_start(header, False, False, 0)
+        self.pack_start(brand_box, False, False, 0)
 
-        # -- search + accordion controls --------------------------------------
+        # -- toolbar row: select, search, refresh, collapse/expand -----------
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        toolbar.set_margin_start(10)
+        toolbar.set_margin_end(10)
+        toolbar.set_margin_top(8)
+        toolbar.set_margin_bottom(6)
+
+        self.select_btn = Gtk.ToggleButton()
+        self.select_btn.set_image(Gtk.Image.new_from_icon_name("object-select-symbolic", Gtk.IconSize.MENU))
+        self.select_btn.get_style_context().add_class("flat")
+        self.select_btn.set_tooltip_text(_("Select sessions"))
+        self.select_btn.connect("toggled", lambda b: self._set_selection_mode(b.get_active()))
+        toolbar.pack_start(self.select_btn, False, False, 0)
+
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text(_("Search sessions…"))
+        self.search_entry.set_placeholder_text(_("Search..."))
         self.search_entry.set_hexpand(True)
         self.search_entry.connect("search-changed", lambda *_: self._invalidate())
+        toolbar.pack_start(self.search_entry, True, True, 0)
 
-        collapse_all = Gtk.Button.new_from_icon_name("pan-up-symbolic", Gtk.IconSize.BUTTON)
+        refresh_btn = Gtk.Button.new_from_icon_name("view-refresh-symbolic", Gtk.IconSize.MENU)
+        refresh_btn.get_style_context().add_class("flat")
+        refresh_btn.set_tooltip_text(_("Refresh session list"))
+        refresh_btn.set_action_name("win.refresh")
+        toolbar.pack_start(refresh_btn, False, False, 0)
+
+        collapse_all = Gtk.Button.new_from_icon_name("pan-up-symbolic", Gtk.IconSize.MENU)
         collapse_all.get_style_context().add_class("flat")
         collapse_all.set_tooltip_text(_("Collapse all groups"))
         collapse_all.connect("clicked", lambda *_: self._set_all_collapsed(True))
+        toolbar.pack_start(collapse_all, False, False, 0)
 
-        expand_all = Gtk.Button.new_from_icon_name("pan-down-symbolic", Gtk.IconSize.BUTTON)
+        expand_all = Gtk.Button.new_from_icon_name("pan-down-symbolic", Gtk.IconSize.MENU)
         expand_all.get_style_context().add_class("flat")
         expand_all.set_tooltip_text(_("Expand all groups"))
         expand_all.connect("clicked", lambda *_: self._set_all_collapsed(False))
+        toolbar.pack_start(expand_all, False, False, 0)
 
-        search_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        search_box.set_margin_start(8)
-        search_box.set_margin_end(8)
-        search_box.set_margin_bottom(6)
-        search_box.pack_start(self.search_entry, True, True, 0)
-        search_box.pack_start(collapse_all, False, False, 0)
-        search_box.pack_start(expand_all, False, False, 0)
-        self.pack_start(search_box, False, False, 0)
+        self.pack_start(toolbar, False, False, 0)
 
         # -- list ------------------------------------------------------------
         self.list = Gtk.ListBox()
@@ -338,8 +360,7 @@ class SessionSidebar(Gtk.Box):
         # -- status footer ----------------------------------------------------
         self.footer = Gtk.Label()
         self.footer.get_style_context().add_class("dim-label")
-        self.footer.set_margin_top(4)
-        self.footer.set_margin_bottom(6)
+        self.footer.get_style_context().add_class("sidebar-footer")
         self.footer.set_ellipsize(_ELLIPSIZE_END)
         self.pack_start(self.footer, False, False, 0)
 

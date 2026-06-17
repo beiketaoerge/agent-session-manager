@@ -35,14 +35,18 @@ class QuickSwitcher(Gtk.Window):
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
 
         self._entry = Gtk.SearchEntry()
-        self._entry.set_placeholder_text("Jump to a session…")
-        self._entry.set_margin_top(10)
-        self._entry.set_margin_start(10)
-        self._entry.set_margin_end(10)
+        self._entry.get_style_context().add_class("switcher-entry")
+        self._entry.set_placeholder_text("Jump to a session...")
+        self._entry.set_margin_top(12)
+        self._entry.set_margin_start(12)
+        self._entry.set_margin_end(12)
+        self._entry.set_margin_bottom(4)
         self._entry.connect("search-changed", lambda *_: self._refilter())
         self._entry.connect("activate", lambda *_: self._activate_selected())
 
         self._entry.connect("key-press-event", self._on_key)
+
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
 
         self._list = Gtk.ListBox()
         self._list.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -54,8 +58,9 @@ class QuickSwitcher(Gtk.Window):
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.add(self._list)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         box.pack_start(self._entry, False, False, 0)
+        box.pack_start(sep, False, False, 0)
         box.pack_start(scrolled, True, True, 0)
         self.add(box)
 
@@ -97,10 +102,11 @@ class QuickSwitcher(Gtk.Window):
     def _make_row(self, item: SessionItem) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow()
         row.item = item
+        row.get_style_context().add_class("switcher-row")
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        box.set_margin_top(7)
-        box.set_margin_bottom(7)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
         box.set_margin_start(12)
         box.set_margin_end(12)
 

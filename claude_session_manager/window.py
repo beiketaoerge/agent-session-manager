@@ -73,20 +73,25 @@ class MainWindow(Gtk.ApplicationWindow):
 
         content_header = Gtk.HeaderBar()
         content_header.set_show_close_button(True)
-        content_header.set_title("Agent Session Manager")
+        content_header.set_title("")
+        content_header.set_has_subtitle(False)
 
         self.sidebar_toggle = Gtk.ToggleButton()
         self.sidebar_toggle.set_image(Gtk.Image.new_from_icon_name("view-sidebar-symbolic", Gtk.IconSize.BUTTON))
+        self.sidebar_toggle.get_style_context().add_class("flat")
         self.sidebar_toggle.set_active(True)
         self.sidebar_toggle.set_tooltip_text(_("Toggle sidebar (F9)"))
         content_header.pack_start(self.sidebar_toggle)
 
         new_btn = Gtk.Button.new_from_icon_name("tab-new-symbolic", Gtk.IconSize.BUTTON)
         new_btn.set_tooltip_text(_("New session (Ctrl+Shift+T)"))
+        new_btn.get_style_context().add_class("flat")
+        new_btn.get_style_context().add_class("cc-accent-btn")
         new_btn.connect("clicked", lambda *_: self._new_session())
         content_header.pack_start(new_btn)
 
         self.close_all_btn = Gtk.Button.new_from_icon_name("edit-clear-all-symbolic", Gtk.IconSize.BUTTON)
+        self.close_all_btn.get_style_context().add_class("flat")
         self.close_all_btn.set_tooltip_text(_("Close all tabs"))
         self.close_all_btn.set_no_show_all(True)
         self.close_all_btn.set_visible(False)
@@ -99,14 +104,51 @@ class MainWindow(Gtk.ApplicationWindow):
         self._placeholder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._placeholder.set_valign(Gtk.Align.CENTER)
         self._placeholder.set_halign(Gtk.Align.CENTER)
-        ph_icon = Gtk.Image.new_from_icon_name("utilities-terminal-symbolic", Gtk.IconSize.DIALOG)
-        self._placeholder.pack_start(ph_icon, False, False, 0)
-        ph_title = Gtk.Label(label=f"<b>{_('No session open')}</b>")
-        ph_title.set_use_markup(True)
+
+        logo_text = (
+            "     _    ____  __  __\n"
+            "    / \\  / ___||  \\/  |\n"
+            "   / _ \\ \\___ \\| |\\/| |\n"
+            "  / ___ \\ ___) | |  | |\n"
+            " /_/   \\_\\____/|_|  |_|\n"
+        )
+        logo = Gtk.Label(label=logo_text)
+        logo.get_style_context().add_class("cc-logo-art")
+        self._placeholder.pack_start(logo, False, False, 0)
+
+        ph_title = Gtk.Label(label=_("No session open"))
+        ph_title.get_style_context().add_class("cc-placeholder-title")
+        ph_title.set_margin_top(8)
         self._placeholder.pack_start(ph_title, False, False, 0)
+
         ph_desc = Gtk.Label(label=_("Pick a session from the sidebar, or start a new one."))
-        ph_desc.get_style_context().add_class("dim-label")
+        ph_desc.get_style_context().add_class("cc-placeholder-desc")
         self._placeholder.pack_start(ph_desc, False, False, 0)
+
+        shortcuts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        shortcuts_box.set_margin_top(24)
+        for keys, desc in [
+            (["Ctrl", "Shift", "T"], _("New session")),
+            (["Ctrl", "Shift", "K"], _("Quick switch")),
+            (["Ctrl", ","], _("Preferences")),
+            (["F9"], _("Toggle sidebar")),
+        ]:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            row.set_halign(Gtk.Align.CENTER)
+            key_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=3)
+            key_box.set_size_request(180, -1)
+            key_box.set_halign(Gtk.Align.END)
+            for k in keys:
+                kbd = Gtk.Label(label=k)
+                kbd.get_style_context().add_class("cc-kbd")
+                key_box.pack_start(kbd, False, False, 0)
+            row.pack_start(key_box, False, False, 0)
+            desc_label = Gtk.Label(label=desc, xalign=0.0)
+            desc_label.get_style_context().add_class("cc-placeholder-desc")
+            desc_label.set_size_request(140, -1)
+            row.pack_start(desc_label, False, False, 0)
+            shortcuts_box.pack_start(row, False, False, 0)
+        self._placeholder.pack_start(shortcuts_box, False, False, 0)
 
         self.content_stack = Gtk.Stack()
         self.content_stack.add_named(self._placeholder, "empty")
