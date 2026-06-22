@@ -68,12 +68,27 @@ class GroupHeaderRow(Gtk.ListBoxRow):
         count_label.get_style_context().add_class("count-badge")
         box.pack_start(count_label, False, False, 0)
 
+        self._new_btn = None
+        if group_key != FAV_GROUP:
+            self._new_btn = Gtk.Button()
+            self._new_btn.set_image(
+                Gtk.Image.new_from_icon_name("tab-new-symbolic", Gtk.IconSize.MENU)
+            )
+            self._new_btn.get_style_context().add_class("flat")
+            self._new_btn.set_tooltip_text(_("New session in this folder"))
+            self._new_btn.connect_after("button-press-event", self._stop_button_event)
+            self._new_btn.connect_after("button-release-event", self._stop_button_event)
+            box.pack_start(self._new_btn, False, False, 0)
+
         self.add(box)
         self.set_collapsed(collapsed)
 
     def set_collapsed(self, collapsed: bool) -> None:
         icon_name = "pan-end-symbolic" if collapsed else "pan-down-symbolic"
         self._arrow.set_from_icon_name(icon_name, Gtk.IconSize.MENU)
+
+    def _stop_button_event(self, _button, _event) -> bool:
+        return True
 
 
 class SessionRow(Gtk.ListBoxRow):
@@ -233,6 +248,7 @@ class SessionSidebar(Gtk.Box):
         "open-session": (GObject.SignalFlags.RUN_FIRST, None, (object, bool)),
         "open-many": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         "trash-many": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        "new-session-for-cwd": (GObject.SignalFlags.RUN_FIRST, None, (str,)),
     }
 
     def __init__(self, store: SessionStore) -> None:
@@ -425,6 +441,10 @@ class SessionSidebar(Gtk.Box):
                     self.store.group_counts.get(item.group_key, 0),
                     item.group_key in self._collapsed,
                 )
+                if header._new_btn is not None:
+                    header._new_btn.connect(
+                        "clicked", self._on_new_in_group, item.group_key
+                    )
                 self._header_rows[item.group_key] = header
                 self.list.add(header)
                 previous_group = item.group_key
@@ -488,6 +508,11 @@ class SessionSidebar(Gtk.Box):
             row.check.set_active(not row.check.get_active())
             return
         self.emit("open-session", row.item, False)
+
+    def _on_new_in_group(self, _btn, group_key: tuple) -> None:
+        cwd = self.store.group_cwd(group_key)
+        if cwd:
+            self.emit("new-session-for-cwd", cwd)
 
     # -- context menu ------------------------------------------------------------
 

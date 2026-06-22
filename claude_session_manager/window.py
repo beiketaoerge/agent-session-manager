@@ -162,6 +162,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.sidebar.connect("open-session", self._on_sidebar_open)
         self.sidebar.connect("open-many", self._on_sidebar_open_many)
         self.sidebar.connect("trash-many", self._on_sidebar_trash_many)
+        self.sidebar.connect("new-session-for-cwd", self._on_sidebar_new_for_cwd)
 
         self.sidebar.set_size_request(220, -1)
         self.split = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
@@ -289,6 +290,9 @@ class MainWindow(Gtk.ApplicationWindow):
     def _on_sidebar_open_many(self, _sidebar, items: list[SessionItem]) -> None:
         for item in items:
             self.open_session(item.session)
+
+    def _on_sidebar_new_for_cwd(self, _sidebar, cwd: str) -> None:
+        self._start_new_session(cwd)
 
     def _on_sidebar_trash_many(self, _sidebar, items: list[SessionItem]) -> None:
         def do_trash() -> None:

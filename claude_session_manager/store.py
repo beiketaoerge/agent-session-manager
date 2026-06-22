@@ -184,6 +184,14 @@ class SessionStore(GObject.Object):
     def get_session(self, session_id: str) -> Session | None:
         return self.sessions.get(session_id)
 
+    def group_cwd(self, group_key: tuple) -> str | None:
+        """Return the cwd of the most recent session in the given group."""
+        for i in range(self.model.get_n_items()):
+            item = self.model.get_item(i)
+            if item.group_key == group_key:
+                return item.session.cwd
+        return None
+
     # -- mutations (all UI changes go through here) ------------------------------
 
     def rename(self, session_id: str, name: str) -> None:
