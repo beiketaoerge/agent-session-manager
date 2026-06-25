@@ -182,7 +182,7 @@ row.session-child:active {
 notebook header { border-bottom: 1px solid alpha(@cc_accent, 0.08); }
 
 notebook tab {
-  padding: 6px 12px;
+  padding: 5px 8px;
   border-radius: 6px 6px 0 0;
   border-bottom: 2px solid transparent;
   transition: 150ms ease;
@@ -197,11 +197,14 @@ notebook tab:hover {
   background-color: alpha(@cc_accent, 0.06);
 }
 notebook tab:hover label { opacity: 0.75; }
+notebook tab .cc-tab-title {
+  min-width: 0;
+}
 
 /* -- Tab close button -------------------------------------------- */
 notebook tab button {
-  min-width: 18px;
-  min-height: 18px;
+  min-width: 16px;
+  min-height: 16px;
   padding: 0;
   border-radius: 100px;
   opacity: 0.4;

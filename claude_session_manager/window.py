@@ -27,18 +27,33 @@ from .terminal import TerminalTab
 
 _GHOSTTY = shutil.which("ghostty")
 _IDLE_NOTIFY_MS = 4000
+_TAB_TITLE_MIN_CHARS = 12
+_TAB_TITLE_MAX_CHARS = 34
+
+
+def _tab_title_width(title: str) -> int:
+    length = len(title.strip())
+    return max(_TAB_TITLE_MIN_CHARS, min(_TAB_TITLE_MAX_CHARS, length))
 
 
 def _make_tab_label(title: str, on_close) -> Gtk.Box:
     """Build a notebook tab label with a close button."""
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-    label = Gtk.Label(label=title)
+    box.get_style_context().add_class("cc-tab-label")
+
+    label = Gtk.Label(label=title, xalign=0.0)
+    label.get_style_context().add_class("cc-tab-title")
     label.set_ellipsize(3)  # Pango.EllipsizeMode.END
-    label.set_max_width_chars(20)
-    box.pack_start(label, True, True, 0)
+    label.set_single_line_mode(True)
+    label.set_width_chars(_tab_title_width(title))
+    label.set_max_width_chars(_TAB_TITLE_MAX_CHARS)
+    label.set_tooltip_text(title)
+    box.pack_start(label, False, True, 0)
+
     close_btn = Gtk.Button.new_from_icon_name("window-close-symbolic", Gtk.IconSize.MENU)
     close_btn.get_style_context().add_class("flat")
     close_btn.set_relief(Gtk.ReliefStyle.NONE)
+    close_btn.set_tooltip_text(_("Close tab"))
     close_btn.connect("clicked", on_close)
     box.pack_start(close_btn, False, False, 0)
     box.show_all()
