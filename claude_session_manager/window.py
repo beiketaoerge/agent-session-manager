@@ -27,16 +27,47 @@ from .terminal import TerminalTab
 
 _GHOSTTY = shutil.which("ghostty")
 _IDLE_NOTIFY_MS = 4000
-_TAB_TITLE_MIN_CHARS = 12
+_TAB_TITLE_MIN_CHARS = 5
 _TAB_TITLE_MAX_CHARS = 34
+_TAB_TITLE_EXTRA_PX = 44
+_TAB_TITLE_CHAR_PX = 8
 
 
-def _tab_title_width(title: str) -> int:
+def _fallback_tab_title_width(tab_count: int) -> int:
+    if tab_count <= 1:
+        return _TAB_TITLE_MAX_CHARS
+    if tab_count <= 3:
+        return 26
+    if tab_count <= 5:
+        return 18
+    if tab_count <= 8:
+        return 12
+    if tab_count <= 12:
+        return 8
+    return _TAB_TITLE_MIN_CHARS
+
+
+def _tab_title_width(title: str, tab_count: int = 1, available_width: int = 0) -> int:
     length = len(title.strip())
-    return max(_TAB_TITLE_MIN_CHARS, min(_TAB_TITLE_MAX_CHARS, length))
+    if available_width > 0 and tab_count > 0:
+        per_tab_px = max(1, available_width // tab_count)
+        max_chars = (per_tab_px - _TAB_TITLE_EXTRA_PX) // _TAB_TITLE_CHAR_PX
+        max_chars = max(_TAB_TITLE_MIN_CHARS, min(_TAB_TITLE_MAX_CHARS, max_chars))
+    else:
+        max_chars = _fallback_tab_title_width(tab_count)
+    return max(_TAB_TITLE_MIN_CHARS, min(max_chars, max(1, length)))
 
 
-def _make_tab_label(title: str, on_close) -> Gtk.Box:
+def _tab_title_label(tab_label: Gtk.Widget | None) -> Gtk.Label | None:
+    if not isinstance(tab_label, Gtk.Container):
+        return None
+    for child in tab_label.get_children():
+        if isinstance(child, Gtk.Label):
+            return child
+    return None
+
+
+def _make_tab_label(title: str, on_close, title_width: int | None = None) -> Gtk.Box:
     """Build a notebook tab label with a close button."""
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
     box.get_style_context().add_class("cc-tab-label")
@@ -45,8 +76,9 @@ def _make_tab_label(title: str, on_close) -> Gtk.Box:
     label.get_style_context().add_class("cc-tab-title")
     label.set_ellipsize(3)  # Pango.EllipsizeMode.END
     label.set_single_line_mode(True)
-    label.set_width_chars(_tab_title_width(title))
-    label.set_max_width_chars(_TAB_TITLE_MAX_CHARS)
+    width = title_width or _tab_title_width(title)
+    label.set_width_chars(width)
+    label.set_max_width_chars(width)
     label.set_tooltip_text(title)
     box.pack_start(label, False, True, 0)
 
@@ -77,6 +109,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self._needs_attention: set[TerminalTab] = set()
         self._idle_sources: dict[TerminalTab, int] = {}
         self._switcher: QuickSwitcher | None = None
+        self._last_notebook_width = 0
 
         self._install_actions()
 
@@ -85,6 +118,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.notebook.set_scrollable(True)
         self.notebook.set_show_tabs(True)
         self.notebook.connect("switch-page", self._on_page_switched)
+        self.notebook.connect("size-allocate", self._on_notebook_size_allocated)
 
         content_header = Gtk.HeaderBar()
         content_header.set_show_close_button(True)
@@ -421,6 +455,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.content_stack.set_visible_child_name("tabs")
         self.close_all_btn.set_visible(self.notebook.get_n_pages() > 1)
         tab.show_all()
+        self._resize_tab_titles()
         GLib.idle_add(tab.grab_terminal_focus)
 
     def _update_tab_title(self, tab: TerminalTab, title: str) -> None:
@@ -439,6 +474,30 @@ class MainWindow(Gtk.ApplicationWindow):
         if tooltip:
             new_label.set_tooltip_text(tooltip.get_tooltip_text() or "")
         self.notebook.set_tab_label(tab, new_label)
+        self._resize_tab_titles()
+
+    def _on_notebook_size_allocated(self, _notebook: Gtk.Notebook, allocation) -> None:
+        width = allocation.width
+        if abs(width - self._last_notebook_width) < 16:
+            return
+        self._last_notebook_width = width
+        self._resize_tab_titles()
+
+    def _resize_tab_titles(self) -> None:
+        tab_count = self.notebook.get_n_pages()
+        if tab_count <= 0:
+            return
+        available_width = self.notebook.get_allocated_width()
+        for i in range(tab_count):
+            page = self.notebook.get_nth_page(i)
+            tab_label = self.notebook.get_tab_label(page)
+            title_label = _tab_title_label(tab_label)
+            if title_label is None:
+                continue
+            title = self._tab_titles.get(page, title_label.get_text())
+            width = _tab_title_width(title, tab_count, available_width)
+            title_label.set_width_chars(width)
+            title_label.set_max_width_chars(width)
 
     def _request_close_tab(self, tab: TerminalTab) -> None:
         if tab in self._confirmed_closes or not tab.has_running_command():
@@ -467,6 +526,7 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.notebook.get_n_pages() == 0:
             self.content_stack.set_visible_child_name("empty")
         self.close_all_btn.set_visible(self.notebook.get_n_pages() > 1)
+        self._resize_tab_titles()
 
     def _close_current_tab(self) -> None:
         page_num = self.notebook.get_current_page()
