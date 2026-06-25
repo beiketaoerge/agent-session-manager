@@ -354,11 +354,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def _new_session(self, provider=None) -> None:
         provider = provider or self._default_provider()
-        default = self.state.get_setting("new_session_dir")
-        if default and Path(default).is_dir():
-            self._start_new_session(default, provider)
-        else:
-            self._choose_new_session_folder(provider)
+        self._choose_new_session_folder(provider)
 
     def _choose_new_session_folder(self, provider=None) -> None:
         self._new_session_provider = provider or self._default_provider()
